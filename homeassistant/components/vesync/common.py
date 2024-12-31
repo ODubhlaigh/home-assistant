@@ -28,14 +28,17 @@ async def async_process_devices(
     devices[VS_FANS] = []
     devices[VS_LIGHTS] = []
     devices[VS_SENSORS] = []
+    devices[VS_HUMIDIFIERS] = []
 
     await hass.async_add_executor_job(manager.update)
 
     if manager.fans:
-        devices[VS_FANS].extend(manager.fans)
         # Expose fan sensors separately
         devices[VS_SENSORS].extend(manager.fans)
         _LOGGER.debug("%d VeSync fans found", len(manager.fans))
+
+        for fan in manager.fans:
+            devices[VS_HUMIDIFIERS if is_humidifier(fan) else VS_FANS].append(fan)
 
     if manager.bulbs:
         devices[VS_LIGHTS].extend(manager.bulbs)
