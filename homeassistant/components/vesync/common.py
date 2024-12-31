@@ -7,7 +7,14 @@ from pyvesync.vesyncbasedevice import VeSyncBaseDevice
 
 from homeassistant.core import HomeAssistant
 
-from .const import VS_FANS, VS_LIGHTS, VS_SENSORS, VS_SWITCHES
+from .const import (
+    VS_FANS,
+    VS_HUMIDIFIERS,
+    VS_LIGHTS,
+    VS_SENSORS,
+    VS_SWITCHES,
+    VeSyncHumidifierDevice,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,3 +56,15 @@ async def async_process_devices(
         _LOGGER.debug("%d VeSync switches found", len(manager.switches))
 
     return devices
+
+
+def is_humidifier(device) -> bool:
+    """Check if the device represents a humidifier."""
+
+    # VeSyncHumid200300S is the base for all humidifiers except VeSyncSuperior6000S.
+    return isinstance(device, VeSyncHumidifierDevice)
+
+
+def has_feature(device, dictionary, attribute):
+    """Return the detail of the attribute."""
+    return getattr(device, dictionary, {}).get(attribute, None) is not None
