@@ -1,5 +1,7 @@
 """Constants for VeSync Component."""
 
+from pyvesync.vesyncfan import VeSyncHumid200300S, VeSyncSuperior6000S
+
 DOMAIN = "vesync"
 VS_DISCOVERY = "vesync_discovery_{}"
 SERVICE_UPDATE_DEVS = "update_devices"
@@ -22,8 +24,17 @@ VS_SWITCHES = "switches"
 VS_FANS = "fans"
 VS_LIGHTS = "lights"
 VS_SENSORS = "sensors"
+VS_HUMIDIFIERS = "humidifiers"
 VS_COORDINATOR = "coordinator"
 VS_MANAGER = "manager"
+
+VS_HUMIDIFIER_MODE_AUTO = "auto"
+VS_HUMIDIFIER_MODE_HUMIDITY = "humidity"
+VS_HUMIDIFIER_MODE_MANUAL = "manual"
+VS_HUMIDIFIER_MODE_SLEEP = "sleep"
+
+VeSyncHumidifierDevice = VeSyncHumid200300S | VeSyncSuperior6000S
+"""Humidifier device types"""
 
 DEV_TYPE_TO_HA = {
     "wifi-switch-1.3": "outlet",
@@ -84,3 +95,4 @@ SKU_TO_BASE_DEVICE = {
     "LAP-EL551S-WEU": "EverestAir",  # Alt ID Model EverestAir
     "LAP-EL551S-WUS": "EverestAir",  # Alt ID Model EverestAir
 }
+"""Mapping of air purifier device type to base type."""
