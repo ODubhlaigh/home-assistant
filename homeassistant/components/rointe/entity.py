@@ -1,4 +1,5 @@
 """Rointe devices entity model."""
+
 from __future__ import annotations
 
 from homeassistant.helpers.device_registry import DeviceInfo

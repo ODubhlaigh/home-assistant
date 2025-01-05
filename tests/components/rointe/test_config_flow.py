@@ -1,4 +1,5 @@
 """Test the Rointe config flow."""
+
 import sys
 from unittest.mock import patch
 
@@ -24,12 +25,15 @@ async def test_user_flow(hass, setup_rointe_login_ok):
     assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["errors"] is None
 
-    with patch(
-        "homeassistant.components.rointe.config_flow.RointeAPI.get_installations",
-    ) as mock_get_installations, patch.object(
-        sys.modules["homeassistant.components.rointe"],
-        "async_setup_entry",
-        return_value=True,
+    with (
+        patch(
+            "homeassistant.components.rointe.config_flow.RointeAPI.get_installations",
+        ) as mock_get_installations,
+        patch.object(
+            sys.modules["homeassistant.components.rointe"],
+            "async_setup_entry",
+            return_value=True,
+        ),
     ):
         # Prepare mocks.
         mock_get_installations.return_value = ApiResponse(

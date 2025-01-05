@@ -1,4 +1,5 @@
 """Tests for the Rointe coordinator."""
+
 from copy import deepcopy
 import sys
 from unittest.mock import MagicMock, patch

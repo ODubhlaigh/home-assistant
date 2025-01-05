@@ -150,9 +150,9 @@ class RointeDeviceManager:
         firmware_map_response: ApiResponse = firmware_map_future.result()
 
         if firmware_map_response.success and firmware_map_response.data:
-            firmware_map: dict[
-                RointeProduct, dict[str, str]
-            ] | None = firmware_map_response.data
+            firmware_map: dict[RointeProduct, dict[str, str]] | None = (
+                firmware_map_response.data
+            )
         else:
             LOGGER.error(
                 "Unable to fetch firmware map: %s",

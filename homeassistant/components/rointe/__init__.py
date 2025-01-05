@@ -1,4 +1,5 @@
 """The Rointe Heaters integration."""
+
 from __future__ import annotations
 
 from rointesdk.rointe_api import ApiResponse, RointeAPI
