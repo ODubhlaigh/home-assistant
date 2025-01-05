@@ -1,0 +1,10 @@
+{
+  "domain": "rointe",
+  "name": "Rointe Heaters",
+  "codeowners": ["@tggm"],
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/rointe",
+  "iot_class": "cloud_polling",
+  "quality_scale": "internal",
+  "requirements": ["rointe-sdk==1.5.1"]
+}
