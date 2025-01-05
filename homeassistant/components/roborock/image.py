@@ -3,11 +3,9 @@
 import asyncio
 from datetime import datetime
 import io
-from itertools import chain
 
 from roborock import RoborockCommand
 from vacuum_map_parser_base.config.color import ColorsPalette
-from vacuum_map_parser_base.config.drawable import Drawable
 from vacuum_map_parser_base.config.image_config import ImageConfig
 from vacuum_map_parser_base.config.size import Sizes
 from vacuum_map_parser_roborock.map_data_parser import RoborockMapDataParser
@@ -17,7 +15,6 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import slugify
 import homeassistant.util.dt as dt_util
 
 from . import RoborockConfigEntry
@@ -38,17 +35,26 @@ async def async_setup_entry(
         for drawable, default_value in DEFAULT_DRAWABLES.items()
         if config_entry.options.get(DRAWABLES, {}).get(drawable, default_value)
     ]
-    entities = list(
-        chain.from_iterable(
-            await asyncio.gather(
-                *(
-                    create_coordinator_maps(coord, drawables)
-                    for coord in config_entry.runtime_data.v1
-                )
-            )
-        )
+    parser = RoborockMapDataParser(
+        ColorsPalette(), Sizes(), drawables, ImageConfig(), []
     )
-    async_add_entities(entities)
+    await asyncio.gather(
+        *(refresh_coordinators(hass, coord) for coord in config_entry.runtime_data.v1)
+    )
+    async_add_entities(
+        (
+            RoborockMap(
+                f"{coord.duid_slug}_map_{map_info.name}",
+                coord,
+                map_info.flag,
+                map_info.name,
+                parser,
+            )
+            for coord in config_entry.runtime_data.v1
+            for map_info in coord.maps.values()
+        ),
+        True,
+    )
 
 
 class RoborockMap(RoborockCoordinatedEntityV1, ImageEntity):
@@ -56,32 +62,23 @@ class RoborockMap(RoborockCoordinatedEntityV1, ImageEntity):
 
     _attr_has_entity_name = True
     image_last_updated: datetime
+    _attr_name: str
 
     def __init__(
         self,
         unique_id: str,
         coordinator: RoborockDataUpdateCoordinator,
         map_flag: int,
-        starting_map: bytes,
         map_name: str,
-        drawables: list[Drawable],
+        parser: RoborockMapDataParser,
     ) -> None:
         """Initialize a Roborock map."""
         RoborockCoordinatedEntityV1.__init__(self, unique_id, coordinator)
         ImageEntity.__init__(self, coordinator.hass)
         self._attr_name = map_name
-        self.parser = RoborockMapDataParser(
-            ColorsPalette(), Sizes(), drawables, ImageConfig(), []
-        )
-        self._attr_image_last_updated = dt_util.utcnow()
+        self.parser = parser
         self.map_flag = map_flag
-        try:
-            self.cached_map = self._create_image(starting_map)
-        except HomeAssistantError:
-            # If we failed to update the image on init,
-            # we set cached_map to empty bytes
-            # so that we are unavailable and can try again later.
-            self.cached_map = b""
+        self.cached_map = b""
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -107,6 +104,13 @@ class RoborockMap(RoborockCoordinatedEntityV1, ImageEntity):
             and bool(self.coordinator.roborock_device_info.props.status.in_cleaning)
         )
 
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass load any previously cached maps from disk."""
+        await super().async_added_to_hass()
+        content = await self.coordinator.map_storage.async_load_map(self.map_flag)
+        self.cached_map = content or b""
+        self._attr_image_last_updated = dt_util.utcnow()
+
     def _handle_coordinator_update(self) -> None:
         # Bump last updated every third time the coordinator runs, so that async_image
         # will be called and we will evaluate on the new coordinator data if we should
@@ -130,12 +134,19 @@ class RoborockMap(RoborockCoordinatedEntityV1, ImageEntity):
                     translation_key="map_failure",
                 )
             map_data = response[0]
-            self.cached_map = self._create_image(map_data)
+            content = self.create_image(map_data, self.parser)
+            if self.cached_map != content:
+                self.cached_map = content
+                await self.coordinator.map_storage.async_save_map(
+                    self.map_flag,
+                    content,
+                )
         return self.cached_map
 
-    def _create_image(self, map_bytes: bytes) -> bytes:
+    @staticmethod
+    def create_image(map_bytes: bytes, parser: RoborockMapDataParser) -> bytes:
         """Create an image using the map parser."""
-        parsed_map = self.parser.parse(map_bytes)
+        parsed_map = parser.parse(map_bytes)
         if parsed_map.image is None:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -146,25 +157,19 @@ class RoborockMap(RoborockCoordinatedEntityV1, ImageEntity):
         return img_byte_arr.getvalue()
 
 
-async def create_coordinator_maps(
-    coord: RoborockDataUpdateCoordinator, drawables: list[Drawable]
-) -> list[RoborockMap]:
+async def refresh_coordinators(
+    hass: HomeAssistant, coord: RoborockDataUpdateCoordinator
+) -> None:
     """Get the starting map information for all maps for this device.
 
     The following steps must be done synchronously.
     Only one map can be loaded at a time per device.
     """
-    entities = []
     cur_map = coord.current_map
     # This won't be None at this point as the coordinator will have run first.
     assert cur_map is not None
-    # Sort the maps so that we start with the current map and we can skip the
-    # load_multi_map call.
-    maps_info = sorted(
-        coord.maps.items(), key=lambda data: data[0] == cur_map, reverse=True
-    )
-    for map_flag, map_info in maps_info:
-        # Load the map - so we can access it with get_map_v1
+    map_flags = sorted(coord.maps, key=lambda data: data == cur_map, reverse=True)
+    for map_flag in map_flags:
         if map_flag != cur_map:
             # Only change the map and sleep if we have multiple maps.
             await coord.api.send_command(RoborockCommand.LOAD_MULTI_MAP, [map_flag])
@@ -172,27 +177,11 @@ async def create_coordinator_maps(
             # We cannot get the map until the roborock servers fully process the
             # map change.
             await asyncio.sleep(MAP_SLEEP)
-        # Get the map data
-        map_update = await asyncio.gather(
-            *[coord.cloud_api.get_map_v1(), coord.get_rooms()], return_exceptions=True
-        )
-        # If we fail to get the map, we should set it to empty byte,
-        # still create it, and set it as unavailable.
-        api_data: bytes = map_update[0] if isinstance(map_update[0], bytes) else b""
-        entities.append(
-            RoborockMap(
-                f"{slugify(coord.duid)}_map_{map_info.name}",
-                coord,
-                map_flag,
-                api_data,
-                map_info.name,
-                drawables,
-            )
-        )
+        await coord.get_rooms()
+
     if len(coord.maps) != 1:
         # Set the map back to the map the user previously had selected so that it
         # does not change the end user's app.
         # Only needs to happen when we changed maps above.
         await coord.cloud_api.send_command(RoborockCommand.LOAD_MULTI_MAP, [cur_map])
         coord.current_map = cur_map
-    return entities
