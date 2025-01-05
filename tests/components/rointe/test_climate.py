@@ -38,7 +38,7 @@ def get_initial_device_data_mock():
     instance_mock.initialize_authentication.return_value = ApiResponse(True, None, None)
 
     # Firmware map:
-    map = {
+    product_map = {
         RointeProduct.RADIATOR_V2: {
             "1_2_5": "2_0_2",
             "1_2_6": "2_0_2",
@@ -47,7 +47,9 @@ def get_initial_device_data_mock():
         }
     }
 
-    instance_mock.get_latest_firmware.return_value = ApiResponse(True, map, None)
+    instance_mock.get_latest_firmware.return_value = ApiResponse(
+        True, product_map, None
+    )
 
     # Get all devices.
     instance_mock.get_installation_devices.return_value = MOCK_GET_DEVICES_RESPONSE

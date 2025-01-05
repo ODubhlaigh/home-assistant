@@ -218,11 +218,7 @@ class RointeDeviceManager:
         else:
             latest_fw = None
 
-        new_device = self._add_or_update_device(
-            base_data, energy_data, device_id, latest_fw
-        )
-
-        return new_device
+        return self._add_or_update_device(base_data, energy_data, device_id, latest_fw)
 
     def _add_or_update_device(
         self,
@@ -277,14 +273,12 @@ class RointeDeviceManager:
             else "N/A",
         )
 
-        rointe_device = RointeDevice(
+        return RointeDevice(
             device_info=device_data,
             device_id=device_id,
             energy_data=energy_stats,
             latest_fw=latest_fw,
         )
-
-        return rointe_device
 
     async def send_command(
         self, device: RointeDevice, command: RointeCommand, arg
